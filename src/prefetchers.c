@@ -25,36 +25,31 @@ struct prefetcher *null_prefetcher_new()
 
 // Sequential Prefetcher
 // ============================================================================
-// TODO feel free to create additional structs/enums as necessary
-
 // data for prefetching
 typedef struct {
-    uint32_t num;
+    uint32_t fixed_stride; //used for custom prefetcher
+    uint32_t num; // number of cache lines to prefetch
 } Prefetch_data;
 
 uint32_t sequential_handle_mem_access(struct prefetcher *prefetcher,
                                       struct cache_system *cache_system, uint32_t address,
                                       bool is_miss)
 {
-    // TODO: Return the number of lines that were prefetched.
-    // For this strategy, whenever a cache line is accessed, the next N lines should be prefetched.
-    // Extract the prefetch amount from the prefetcher data
     uint32_t prefetch_address, i;
     Prefetch_data* prefetch_info  = prefetcher->data;
     uint32_t prefetch_amt = prefetch_info->num;
 
     // Prefetch the num lines
     for (i = 1; i <= prefetch_amt; i++) {
-        prefetch_address = address + (cache_system->line_size * i);
-        cache_system_mem_access(cache_system, prefetch_address, 'R', true);
+        prefetch_address = address + (cache_system->line_size * i); // compute address of next cache line
+        cache_system_mem_access(cache_system, prefetch_address, 'R', true); // calls for prefetch read operation
     }
 
-    return prefetch_amt;
+    return prefetch_amt; //returns the number of cache lines to prefetch 
 }
 
 void sequential_cleanup(struct prefetcher *prefetcher)
 {
-    // TODO cleanup any additional memory that you allocated in the
     // Free the prefetcher data
     free(prefetcher->data);
 
@@ -65,12 +60,9 @@ struct prefetcher *sequential_prefetcher_new(uint32_t prefetch_amount)
     struct prefetcher *sequential_prefetcher = calloc(1, sizeof(struct prefetcher));
     sequential_prefetcher->handle_mem_access = &sequential_handle_mem_access;
     sequential_prefetcher->cleanup = &sequential_cleanup;
-
-    // TODO allocate any additional memory needed to store metadata here and
-    // assign to sequential_prefetcher->data.
-    // Allocate memory for prefetch_amount and store it in the prefetcher data
-
-    Prefetch_data* prefetch_ptr = malloc(sizeof(Prefetch_data));
+    
+    // initializes its function pointers and data
+    Prefetch_data* prefetch_ptr = malloc(sizeof(Prefetch_data)); // Allocate memory for prefetch_amount and store it in the prefetcher data
     prefetch_ptr->num = prefetch_amount;
     sequential_prefetcher->data = prefetch_ptr;
 
@@ -85,11 +77,11 @@ uint32_t adjacent_handle_mem_access(struct prefetcher *prefetcher,
                                     bool is_miss)
 {
     Prefetch_data* prefetch_info  = prefetcher->data;
-    uint32_t prefetch_amt = prefetch_info->num; //prefetch amount should be one
-
-    // Prefetch the  lines
+    uint32_t prefetch_amt = prefetch_info->num; // prefetch amount should be one, as the adjacent prefetcher fetches only one line
+    
+    // Prefetch the next adjacent line
     uint32_t prefetch_address = address +  (cache_system->line_size);
-    cache_system_mem_access(cache_system, prefetch_address, 'R', true);
+    cache_system_mem_access(cache_system, prefetch_address, 'R', true);  // calls for prefetch read operation
 
     return prefetch_amt;
 }
@@ -106,8 +98,7 @@ struct prefetcher *adjacent_prefetcher_new()
     adjacent_prefetcher->handle_mem_access = &adjacent_handle_mem_access;
     adjacent_prefetcher->cleanup = &adjacent_cleanup;
 
-    // TODO allocate any additional memory needed to store metadata here and
-    // assign to adjacent_prefetcher->data.
+    // Allocate memory for Prefetch_data and store '1' in its 'num' field since only one line will be prefetched
     Prefetch_data* prefetch_ptr = malloc(sizeof(Prefetch_data));
     prefetch_ptr->num = 1; //assinging one since adj prefetches the next cache line after the current one being accessed
     adjacent_prefetcher->data = prefetch_ptr;
@@ -120,16 +111,26 @@ struct prefetcher *adjacent_prefetcher_new()
 uint32_t custom_handle_mem_access(struct prefetcher *prefetcher, struct cache_system *cache_system,
                                   uint32_t address, bool is_miss)
 {
-    // TODO perform the necessary prefetches for your custom strategy.
 
-    // TODO: Return the number of lines that were prefetched.
-    return 0;
+    uint32_t prefetch_address, i;
+    Prefetch_data* prefetch_info  = prefetcher->data;
+    uint32_t prefetch_amt = prefetch_info->num; // Get the number of cache lines to prefetch from the Prefetch_data structure
+    uint32_t stride = prefetch_info->fixed_stride; // It uses a custom stride value specified in 'fixed_stride' to determine which lines to prefetch
+
+
+    // Prefetch the appropriate cache lines as determined by the stride value
+    for (i = 0; i < prefetch_amt; i++) { 
+        prefetch_address = address + ((i + 1) * stride * cache_system->line_size);  // compute the address of the next cache line to prefetch based on the stride value
+        cache_system_mem_access(cache_system, prefetch_address, 'R', true); // finds correct byte offset to apply when computing the prefetch addresses
+    }
+
+    return prefetch_amt;
 }
 
 void custom_cleanup(struct prefetcher *prefetcher)
 {
-    // TODO cleanup any additional memory that you allocated in the
-    // custom_prefetcher_new function.
+     // cleanup any additional memory allocated in the adjacent_prefetcher_new function.
+    free(prefetcher->data);
 }
 
 struct prefetcher *custom_prefetcher_new()
@@ -138,8 +139,11 @@ struct prefetcher *custom_prefetcher_new()
     custom_prefetcher->handle_mem_access = &custom_handle_mem_access;
     custom_prefetcher->cleanup = &custom_cleanup;
 
-    // TODO allocate any additional memory needed to store metadata here and
-    // assign to custom_prefetcher->data.
+    // Allocate memory for Prefetch_data and set its fields to appropriate values
+    Prefetch_data* prefetch_ptr = malloc(sizeof(Prefetch_data));
+    prefetch_ptr->num = 3; // prefetch 3 cache lines
+    prefetch_ptr->fixed_stride = 4; // use a stride of 4 
+    custom_prefetcher->data = prefetch_ptr;
 
     return custom_prefetcher;
 }
